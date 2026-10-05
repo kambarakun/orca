@@ -39,6 +39,20 @@ const specs: CommandSpec[] = [
     allowedFlags: []
   },
   {
+    path: ['orchestration', 'reset'],
+    destructive: true,
+    summary: 'Reset orchestration state',
+    usage: 'orca orchestration reset',
+    allowedFlags: []
+  },
+  {
+    path: ['artifacts', 'delete'],
+    destructive: true,
+    summary: 'Delete an artifact',
+    usage: 'orca artifacts delete',
+    allowedFlags: []
+  },
+  {
     path: ['terminal', 'stop'],
     hidden: true,
     summary: 'Deprecated terminal stop',
@@ -157,5 +171,24 @@ describe.each([
     expect(data.nextSteps.join('\n')).toContain('orca orchestration check')
     expect(data.suggestions).not.toContain('orchestration reset')
     expect(data.nextSteps.join('\n')).not.toContain('orca orchestration reset')
+  })
+})
+
+describe.each([
+  { name: 'isolated registry', specs },
+  { name: 'full CLI registry', specs: COMMAND_SPECS }
+])('$name destructive command isolation', ({ specs }) => {
+  it('does not unlock delete for a near-miss of reset', () => {
+    const data = unknownCommandData(specs, ['artifacts', 'deset'])
+
+    expect(data.suggestions).not.toContain('artifacts delete')
+    expect(data.nextSteps.join('\n')).not.toContain('orca artifacts delete')
+  })
+
+  it('still recovers a near-miss of delete itself', () => {
+    const data = unknownCommandData(specs, ['artifacts', 'delet'])
+
+    expect(data.suggestions).toContain('artifacts delete')
+    expect(data.nextSteps.join('\n')).toContain('orca artifacts delete')
   })
 })
