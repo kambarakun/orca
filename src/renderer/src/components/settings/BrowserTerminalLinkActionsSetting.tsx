@@ -93,7 +93,13 @@ export function BrowserTerminalLinkActionsSetting({
               control={
                 <SettingsSegmentedControl<TerminalLinkClickBehavior>
                   value={behavior}
-                  onChange={(value) => updateSettings({ terminalLinkClickBehavior: value })}
+                  onChange={(value) =>
+                    updateSettings({
+                      terminalLinkClickBehavior: value,
+                      // Only an explicit selection should override a legacy opt-out.
+                      ...(value === 'actions' ? { terminalLinkActionPopoverEnabled: true } : {})
+                    })
+                  }
                   ariaLabel={plainClickAriaLabel}
                   size="sm"
                   options={[

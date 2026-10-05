@@ -76,3 +76,18 @@ describe('machine name setting', () => {
     expect(normalizeLegacyProfile({ machineName: 'x'.repeat(300) }).machineName).toHaveLength(255)
   })
 })
+
+it('preserves the legacy link opt-out when the new behavior is defaulted on load', () => {
+  const parsed = getDefaultPersistedState(homedir())
+  parsed.settings.terminalLinkActionPopoverEnabled = false
+  delete parsed.settings.terminalLinkClickBehavior
+  const noop = (): void => {}
+  const terminal = prepareLoadedTerminalSettings(parsed, noop)
+  const profile = prepareLoadedProfileSettings(parsed, terminal.defaults, noop)
+
+  const loaded = normalizeLoadedGlobalSettings(parsed, terminal, profile)
+
+  expect(loaded.terminalLinkClickBehavior).toBe('actions')
+  expect(loaded.terminalLinkActionPopoverEnabled).toBe(false)
+  expect(parsed.settings).not.toHaveProperty('terminalLinkClickBehavior')
+})

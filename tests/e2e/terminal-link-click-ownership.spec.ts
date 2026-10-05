@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import type { Page, TestInfo } from '@playwright/test'
 import { test, expect } from './helpers/orca-app'
@@ -11,6 +11,8 @@ import {
   waitForTerminalOutput
 } from './helpers/terminal'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
+import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
+import { getE2ECompletedOnboardingProfile } from './helpers/e2e-completed-onboarding-profile'
 
 const FIXTURE_PATH = path.join(
   process.cwd(),
@@ -159,3 +161,167 @@ test.describe('terminal link click ownership', () => {
     await sendToTerminal(orcaPage, ptyId, 'q')
   })
 })
+
+async function openLinkSettings(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const state = window.__store?.getState()
+    state?.openSettingsTarget({
+      pane: 'browser',
+      repoId: null,
+      sectionId: 'browser-terminal-link-actions'
+    })
+    state?.openSettingsPage()
+  })
+  await expect(page.getByRole('radiogroup', { name: 'Plain click URL behavior' })).toBeVisible()
+}
+
+function seedLegacyLinkSettings(userDataDir: string): void {
+  const profile = getE2ECompletedOnboardingProfile()
+  writeFileSync(
+    path.join(userDataDir, 'orca-data.json'),
+    JSON.stringify({
+      ...profile,
+      settings: {
+        ...profile.settings,
+        uiLanguage: 'en',
+        terminalLinkActionPopoverEnabled: false,
+        terminalUrlMiddleClickBehavior: 'none'
+      }
+    })
+  )
+}
+
+test('re-enables legacy link actions through settings and keeps them after restart', async ({
+  testRepoPath
+}, testInfo) => {
+  test.setTimeout(240_000)
+  const session = createRestartSession(testInfo)
+  seedLegacyLinkSettings(session.userDataDir)
+  let current: Awaited<ReturnType<typeof session.launch>> | null = null
+  try {
+    current = await session.launch()
+    await waitForSessionReady(current.page)
+    await attachRepoAndOpenTerminal(current.page, testRepoPath)
+    const legacy = await startMouseAwareLinkFixture(current.page, testInfo)
+    await current.page.mouse.click(legacy.target.x, legacy.target.y)
+    await expect(current.page.locator('[data-terminal-link-action-popover]')).toHaveCount(0)
+    await expectChildMouseReports(legacy.mouseLogPath)
+    await sendToTerminal(current.page, legacy.ptyId, 'q')
+    await openLinkSettings(current.page)
+    await expect(
+      current.page
+        .getByRole('radiogroup', { name: 'Plain click URL behavior' })
+        .getByRole('radio', { name: 'Leave to terminal' })
+    ).toHaveAttribute('aria-checked', 'true')
+    await session.close(current.app)
+    current = null
+
+    current = await session.launch()
+    await waitForSessionReady(current.page)
+    await openLinkSettings(current.page)
+    const plain = current.page.getByRole('radiogroup', { name: 'Plain click URL behavior' })
+    await expect(plain.getByRole('radio', { name: 'Leave to terminal' })).toHaveAttribute(
+      'aria-checked',
+      'true'
+    )
+    await plain.getByRole('radio', { name: 'Actions', exact: true }).click()
+    try {
+      await expect(plain.getByRole('radio', { name: 'Actions', exact: true })).toHaveAttribute(
+        'aria-checked',
+        'true'
+      )
+    } finally {
+      await testInfo.attach('actions-selection', {
+        body: await current.page.locator('#browser-terminal-link-actions').screenshot({
+          path: testInfo.outputPath('actions-selection.png')
+        }),
+        contentType: 'image/png'
+      })
+    }
+    await expect(
+      current.page
+        .getByRole('radiogroup', { name: 'Middle click', exact: true })
+        .getByRole('radio', { name: 'Leave to terminal' })
+    ).toHaveAttribute('aria-checked', 'true')
+    await current.page.evaluate(() => window.__store?.getState().closeSettingsPage())
+    const enabled = await startMouseAwareLinkFixture(current.page, testInfo)
+    await current.page.mouse.click(enabled.target.x, enabled.target.y)
+    await expect(current.page.locator('[data-terminal-link-destination]')).toHaveText(LINK)
+    await testInfo.attach('actions-popover', {
+      body: await current.page.locator('[data-terminal-link-action-popover]').screenshot({
+        path: testInfo.outputPath('actions-popover.png')
+      }),
+      contentType: 'image/png'
+    })
+    await sendToTerminal(current.page, enabled.ptyId, 'q')
+    await session.close(current.app)
+    current = null
+
+    current = await session.launch()
+    await waitForSessionReady(current.page)
+    await openLinkSettings(current.page)
+    await expect(
+      current.page
+        .getByRole('radiogroup', { name: 'Plain click URL behavior' })
+        .getByRole('radio', { name: 'Actions', exact: true })
+    ).toHaveAttribute('aria-checked', 'true')
+    await testInfo.attach('actions-after-restart', {
+      body: await current.page.locator('#browser-terminal-link-actions').screenshot({
+        path: testInfo.outputPath('actions-after-restart.png')
+      }),
+      contentType: 'image/png'
+    })
+    await current.page.evaluate(() => window.__store?.getState().closeSettingsPage())
+    const restored = await startMouseAwareLinkFixture(current.page, testInfo)
+    await current.page.mouse.click(restored.target.x, restored.target.y)
+    await expect(current.page.locator('[data-terminal-link-destination]')).toHaveText(LINK)
+    await sendToTerminal(current.page, restored.ptyId, 'q')
+  } finally {
+    if (current) {
+      await session.close(current.app)
+    }
+    await session.dispose()
+  }
+})
+
+for (const label of ['Open URL', 'Leave to terminal']) {
+  test(`keeps ${label} selected after restarting a legacy profile`, async ({
+    testRepoPath
+  }, testInfo) => {
+    const session = createRestartSession(testInfo)
+    seedLegacyLinkSettings(session.userDataDir)
+    let current: Awaited<ReturnType<typeof session.launch>> | null = null
+    try {
+      current = await session.launch()
+      await waitForSessionReady(current.page)
+      await attachRepoAndOpenTerminal(current.page, testRepoPath)
+      await openLinkSettings(current.page)
+      const plain = current.page.getByRole('radiogroup', { name: 'Plain click URL behavior' })
+      await plain.getByRole('radio', { name: 'Open URL' }).click()
+      await expect(plain.getByRole('radio', { name: 'Open URL' })).toHaveAttribute(
+        'aria-checked',
+        'true'
+      )
+      await plain.getByRole('radio', { name: label }).click()
+      await expect(plain.getByRole('radio', { name: label })).toHaveAttribute(
+        'aria-checked',
+        'true'
+      )
+      await session.close(current.app)
+      current = null
+      current = await session.launch()
+      await waitForSessionReady(current.page)
+      await openLinkSettings(current.page)
+      await expect(
+        current.page
+          .getByRole('radiogroup', { name: 'Plain click URL behavior' })
+          .getByRole('radio', { name: label })
+      ).toHaveAttribute('aria-checked', 'true')
+    } finally {
+      if (current) {
+        await session.close(current.app)
+      }
+      await session.dispose()
+    }
+  })
+}

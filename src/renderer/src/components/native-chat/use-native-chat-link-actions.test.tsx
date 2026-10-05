@@ -3,18 +3,22 @@ import type { ReactNode } from 'react'
 import { useRef } from 'react'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { LinkActionPopover } from '@/components/link-actions/LinkActionPopover'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { useNativeChatLinkActions } from './use-native-chat-link-actions'
 
-const mocks = vi.hoisted(() => ({
-  openHttpLink: vi.fn(),
-  openFileLink: vi.fn(),
-  settings: { openLinksInApp: true, terminalLinkActionPopoverEnabled: true } as {
-    openLinksInApp?: boolean
-    terminalLinkActionPopoverEnabled?: boolean
+const mocks = vi.hoisted(() => {
+  const settings: Pick<
+    GlobalSettings,
+    'openLinksInApp' | 'terminalLinkActionPopoverEnabled' | 'terminalLinkClickBehavior'
+  > = { openLinksInApp: true, terminalLinkActionPopoverEnabled: true }
+  return {
+    openHttpLink: vi.fn(),
+    openFileLink: vi.fn(),
+    settings
   }
-}))
+})
 
 vi.mock('@/lib/http-link-routing', () => ({ openHttpLink: mocks.openHttpLink }))
 
@@ -181,4 +185,36 @@ describe('native chat transcript links', () => {
     expect(mocks.openFileLink).toHaveBeenCalledOnce()
     expect(screen.queryByText('System Browser')).toBeNull()
   })
+
+  it.each([
+    { behavior: 'actions', enabled: false, expected: 'none' },
+    { behavior: 'actions', enabled: true, expected: 'actions' },
+    { behavior: 'open', enabled: false, expected: 'open' },
+    { behavior: 'none', enabled: true, expected: 'none' }
+  ] as const)(
+    'keeps $behavior with legacy enabled=$enabled on the $expected route',
+    async ({ behavior, enabled, expected }) => {
+      mocks.settings = {
+        openLinksInApp: true,
+        terminalLinkClickBehavior: behavior,
+        terminalLinkActionPopoverEnabled: enabled
+      }
+      render(<Transcript markdown="[link](https://example.com)" />)
+      fireEvent.click(await screen.findByRole('link', { name: 'link' }))
+
+      if (expected === 'actions') {
+        expect(screen.getByText('System Browser')).toBeTruthy()
+      } else {
+        expect(screen.queryByText('System Browser')).toBeNull()
+      }
+      if (expected === 'open') {
+        expect(mocks.openHttpLink).toHaveBeenCalledWith(
+          'https://example.com',
+          expect.objectContaining({ forceInApp: true })
+        )
+      } else {
+        expect(mocks.openHttpLink).not.toHaveBeenCalled()
+      }
+    }
+  )
 })
