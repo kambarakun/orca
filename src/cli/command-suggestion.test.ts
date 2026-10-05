@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 
 import type { CommandSpec } from './args'
 import { suggestCommands, unknownCommandData } from './command-suggestion'
+import { COMMAND_SPECS } from './specs'
+import { ORCHESTRATION_COMMAND_SPECS } from './specs/orchestration'
 
 const specs: CommandSpec[] = [
   {
@@ -127,5 +129,33 @@ describe('unknownCommandData', () => {
     const data = unknownCommandData(specs, ['worktree', 'move'])
     expect(data.suggestions).not.toContain('worktree remove')
     expect(data.nextSteps.join(' ')).not.toContain('remove')
+  })
+})
+
+describe.each([
+  { name: 'orchestration registry', specs: ORCHESTRATION_COMMAND_SPECS },
+  { name: 'full CLI registry', specs: COMMAND_SPECS }
+])('$name reset suggestion safety', ({ specs }) => {
+  it.each(['resume', 'rerun', 'repl'])('does not suggest reset for %s', (verb) => {
+    const data = unknownCommandData(specs, ['orchestration', verb])
+
+    expect(data.suggestions).not.toContain('orchestration reset')
+    expect(data.nextSteps.join('\n')).not.toContain('orca orchestration reset')
+  })
+
+  it.each(['rese', 'rest'])('still recovers the near-miss %s', (verb) => {
+    const data = unknownCommandData(specs, ['orchestration', verb])
+
+    expect(data.suggestions).toContain('orchestration reset')
+    expect(data.nextSteps.join('\n')).toContain('orca orchestration reset')
+  })
+
+  it('preserves non-destructive check recovery', () => {
+    const data = unknownCommandData(specs, ['orchestration', 'chek'])
+
+    expect(data.suggestions).toContain('orchestration check')
+    expect(data.nextSteps.join('\n')).toContain('orca orchestration check')
+    expect(data.suggestions).not.toContain('orchestration reset')
+    expect(data.nextSteps.join('\n')).not.toContain('orca orchestration reset')
   })
 })
