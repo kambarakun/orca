@@ -12,8 +12,11 @@ import { isProcessRunning } from './runtime-pid-liveness'
 
 export { projectRemoteAppStatus, resolveDesktopWindowStatus }
 
+export type CliStatusOptions = { includeRemoteServer?: boolean }
+
 export async function getCliStatus(
-  userDataPath: string
+  userDataPath: string,
+  options: CliStatusOptions = {}
 ): Promise<RuntimeRpcSuccess<CliStatusResult>> {
   const metadata = tryReadMetadata(userDataPath)
   const transport = metadata ? findTransport(metadata, 'unix', 'named-pipe') : null
@@ -41,7 +44,7 @@ export async function getCliStatus(
     const response = await sendRequest<RuntimeStatus>(
       metadata,
       'status.get',
-      { includeRemoteServer: true },
+      options.includeRemoteServer ? { includeRemoteServer: true } : undefined,
       1000
     )
     if (response.ok === false) {
@@ -50,7 +53,9 @@ export async function getCliStatus(
     const graphState = response.result.graphStatus
     const desktopWindowStatus = resolveDesktopWindowStatus(response.result)
     return buildCliStatusResponse({
-      ...(response.result.remoteServer ? { remoteServer: response.result.remoteServer } : {}),
+      ...(options.includeRemoteServer && response.result.remoteServer
+        ? { remoteServer: response.result.remoteServer }
+        : {}),
       app: {
         running: true,
         pid: metadata.pid,

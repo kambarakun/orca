@@ -45,6 +45,7 @@ type TestRuntime = {
   deviceToken: string
   authFrames: Record<string, unknown>[]
   requestMethods: string[]
+  requestParams: unknown[]
   connectionCount: () => number
   close: () => Promise<void>
 }
@@ -134,8 +135,11 @@ describe('CLI remote WebSocket transport', () => {
     )!
 
     const client = new RuntimeClient('/tmp/unused', 5_000, barePayload)
-    const status = await client.getCliStatus()
+    expect((await client.getCliStatus()).result).not.toHaveProperty('remoteServer')
+    expect((await client.openOrca()).result).not.toHaveProperty('remoteServer')
+    const status = await client.getCliStatus({ includeRemoteServer: true })
 
+    expect(runtime.requestParams).toEqual([undefined, undefined, { includeRemoteServer: true }])
     expect(status.result.app).toEqual({ running: false, pid: null })
     expect(status.result.runtime.reachable).toBe(true)
     expect(status.result.runtime.runtimeId).toBe('runtime-ws-2')
@@ -289,6 +293,7 @@ async function startTestRuntime(
   const wss = new WebSocketServer({ server: httpServer })
   const authFrames: Record<string, unknown>[] = []
   const requestMethods: string[] = []
+  const requestParams: unknown[] = []
   let connectionCount = 0
 
   wss.on('connection', (ws) => {
@@ -337,6 +342,7 @@ async function startTestRuntime(
         params?: { includeRemoteServer?: boolean }
       }
       requestMethods.push(request.method)
+      requestParams.push(request.params)
       const response =
         request.method === 'status.get'
           ? {
@@ -387,6 +393,7 @@ async function startTestRuntime(
     deviceToken,
     authFrames,
     requestMethods,
+    requestParams,
     connectionCount: () => connectionCount,
     close: async () => {
       await new Promise<void>((resolve) => {
