@@ -38,13 +38,19 @@ export async function getCliStatus(
   }
 
   try {
-    const response = await sendRequest<RuntimeStatus>(metadata, 'status.get', undefined, 1000)
+    const response = await sendRequest<RuntimeStatus>(
+      metadata,
+      'status.get',
+      { includeRemoteServer: true },
+      1000
+    )
     if (response.ok === false) {
       throw new RuntimeRpcFailureError(response)
     }
     const graphState = response.result.graphStatus
     const desktopWindowStatus = resolveDesktopWindowStatus(response.result)
     return buildCliStatusResponse({
+      ...(response.result.remoteServer ? { remoteServer: response.result.remoteServer } : {}),
       app: {
         running: true,
         pid: metadata.pid,

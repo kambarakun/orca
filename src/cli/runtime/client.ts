@@ -206,7 +206,7 @@ export class RuntimeClient {
 
   async getCliStatus(): Promise<RuntimeRpcSuccess<CliStatusResult>> {
     if (this.remotePairing) {
-      const response = await this.call<RuntimeStatus>('status.get')
+      const response = await this.call<RuntimeStatus>('status.get', { includeRemoteServer: true })
       this.remoteCompat.noteVerifiedStatus(response.result)
       const graphState = response.result.graphStatus
       return {
@@ -218,6 +218,7 @@ export class RuntimeClient {
             environment: this.environmentSelector ?? 'pairing-code'
           },
           app: projectRemoteAppStatus(response.result),
+          ...(response.result.remoteServer ? { remoteServer: response.result.remoteServer } : {}),
           runtime: {
             state: graphState === 'ready' ? 'ready' : 'graph_not_ready',
             reachable: true,
