@@ -101,6 +101,11 @@ describe('CLI remote WebSocket transport', () => {
 
   it('accepts a bare pairing payload as well as the orca URL wrapper', async () => {
     const runtime = await startTestRuntime('runtime-ws-2', {
+      remoteServer: {
+        listener: { state: 'listening', address: '192.0.2.10', port: 31337 },
+        grants: { state: 'unavailable' },
+        connectedClients: { state: 'unavailable' }
+      },
       appVersion: '1.5.0',
       remoteUpdateSupport: {
         installMode: 'unsupported-headless-serve',
@@ -134,6 +139,11 @@ describe('CLI remote WebSocket transport', () => {
     expect(status.result.app).toEqual({ running: false, pid: null })
     expect(status.result.runtime.reachable).toBe(true)
     expect(status.result.runtime.runtimeId).toBe('runtime-ws-2')
+    expect(status.result.remoteServer).toEqual({
+      listener: { state: 'listening', address: '192.0.2.10', port: 31337 },
+      grants: { state: 'unavailable' },
+      connectedClients: { state: 'unavailable' }
+    })
     expect(status.result.runtime).toMatchObject({
       appVersion: '1.5.0',
       remoteUpdateSupport: { automatic: false, reason: 'manual-service-update-required' },
@@ -184,6 +194,7 @@ describe('CLI remote WebSocket transport', () => {
     expect(status.result.app).toEqual({ running: false, pid: null })
     expect(status.result.runtime.reachable).toBe(true)
     expect(status.result.runtime.runtimeId).toBe('runtime-env-1')
+    expect(status.result).not.toHaveProperty('remoteServer')
   })
 
   it('blocks remote RPCs when the server protocol is too old', async () => {
@@ -261,6 +272,7 @@ async function startTestRuntime(
     runtimeProtocolVersion?: number
     minCompatibleRuntimeClientVersion?: number
     desktopWindowStatus?: 'available' | 'openable' | 'initializing' | 'blocked'
+    remoteServer?: RuntimeStatus['remoteServer']
     appVersion?: string
     remoteUpdateSupport?: {
       installMode: 'unsupported-headless-serve'
@@ -318,7 +330,12 @@ async function startTestRuntime(
         return
       }
 
-      const request = JSON.parse(plaintext) as { id: string; method: string }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture reads authenticated requests emitted by RuntimeClient; tests assert the resulting status.
+      const request = JSON.parse(plaintext) as {
+        id: string
+        method: string
+        params?: { includeRemoteServer?: boolean }
+      }
       requestMethods.push(request.method)
       const response =
         request.method === 'status.get'
@@ -338,6 +355,9 @@ async function startTestRuntime(
                 minCompatibleRuntimeClientVersion:
                   statusOverrides.minCompatibleRuntimeClientVersion ??
                   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
+                ...(request.params?.includeRemoteServer
+                  ? { remoteServer: statusOverrides.remoteServer }
+                  : {}),
                 appVersion: statusOverrides.appVersion,
                 remoteUpdateSupport: statusOverrides.remoteUpdateSupport,
                 capabilities: statusOverrides.capabilities,

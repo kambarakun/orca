@@ -471,6 +471,7 @@ import {
   SpeechModelAction
 } from './speech-params'
 import { SshTarget } from './ssh-params'
+import { StatusGet } from './status-params'
 import {
   AgentsParams,
   AttachParams,
@@ -1144,7 +1145,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'ssh.listTargetSummaries': null,
   'ssh.listTargets': null,
   'stats.summary': null,
-  'status.get': null,
+  'status.get': StatusGet,
   'terminal.adoptOrphans': TerminalAdoptOrphans,
   'terminal.agentStatus': TerminalHandle,
   'terminal.clearBuffer': TerminalHandle,

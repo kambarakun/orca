@@ -3,7 +3,7 @@
 // compromising one device doesn't expose others. The registry is a simple
 // JSON file with hardened permissions matching the runtime metadata pattern.
 import { randomBytes, randomUUID } from 'node:crypto'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import {
   hardenExistingSecureFile,
@@ -69,6 +69,7 @@ export class DeviceRegistry {
   private devices: DeviceEntry[] = []
   /** Set when the registry exists but could not be read, which makes `devices` a lie to save from. */
   private registryUnreadable = false
+  private diagnosticsAvailable = true
   private pendingLastSeenFlush: NodeJS.Timeout | null = null
 
   constructor(userDataPath: string) {
@@ -237,6 +238,10 @@ export class DeviceRegistry {
     return device.mobilePairingConnectionMode === 'local-only' ? 'local-only' : 'automatic'
   }
 
+  get statusAvailable(): boolean {
+    return this.diagnosticsAvailable
+  }
+
   listDevices(): readonly DeviceEntry[] {
     return this.devices
   }
@@ -314,6 +319,14 @@ export class DeviceRegistry {
 
   private load(): void {
     if (!existsSync(this.registryPath)) {
+      // existsSync also returns false for access errors; only ENOENT proves an empty registry.
+      this.diagnosticsAvailable = false
+      try {
+        statSync(this.registryPath)
+      } catch (error) {
+        this.diagnosticsAvailable =
+          error instanceof Error && 'code' in error && error.code === 'ENOENT'
+      }
       this.devices = []
       return
     }
@@ -339,6 +352,7 @@ export class DeviceRegistry {
     } catch (error) {
       // "Cannot read" is not "is empty". Saving an empty list over a registry we were merely
       // denied would erase every paired device's bearer token, and the write would succeed.
+      this.diagnosticsAvailable = false
       this.registryUnreadable = isUnreadableError(error)
       this.devices = []
     }
@@ -351,6 +365,7 @@ export class DeviceRegistry {
       )
     }
     writeSecureJsonFile(this.registryPath, devices)
+    this.diagnosticsAvailable = true
     // Why: every registry save includes the latest in-memory timestamps, so a later timer would rewrite it.
     this.cancelPendingLastSeenFlush()
   }
