@@ -1,3 +1,4 @@
+import type { RemoteServerStatus } from '../../../shared/remote-server-status'
 import type { RuntimeCapability } from '../../../shared/protocol-version'
 import type { TerminalStreamFrame } from '../../../shared/terminal-stream-protocol'
 import type { PairingRpcContext } from './core'
@@ -9,6 +10,8 @@ export type RpcDispatchStreamingOptions = {
   clientId?: string
   pairedDeviceId?: string
   clientKind?: 'mobile' | 'runtime'
+  /** Supplied only by an authenticated server-owner boundary, never request params. */
+  readRemoteServerStatus?: () => RemoteServerStatus
   clientCapabilities?: readonly RuntimeCapability[]
   updateClientCapabilities?: (capabilities: readonly RuntimeCapability[]) => void
   pairing?: PairingRpcContext

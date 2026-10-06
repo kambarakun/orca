@@ -36,7 +36,8 @@ export class RuntimeRpcRequestAdmission extends RuntimeRpcBinaryRouting {
 
     try {
       return await this.dispatcher.dispatch(request, {
-        signal: longPoll ? context?.signal : undefined
+        signal: longPoll ? context?.signal : undefined,
+        readRemoteServerStatus: () => this.readRemoteServerStatus()
       })
     } finally {
       this.releaseLongPoll(longPoll)

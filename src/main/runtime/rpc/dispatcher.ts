@@ -117,6 +117,7 @@ export class RpcDispatcher {
           requestId: request.id,
           clientId: options?.clientId,
           clientKind: options?.clientKind,
+          readRemoteServerStatus: options?.readRemoteServerStatus,
           clientCapabilities: options?.clientCapabilities,
           updateClientCapabilities: options?.updateClientCapabilities,
           authenticatedCallerFingerprint: options?.authenticatedCallerFingerprint,
