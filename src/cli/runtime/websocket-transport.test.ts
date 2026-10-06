@@ -15,6 +15,7 @@ import {
   publicKeyToBase64
 } from '../../shared/e2ee-crypto'
 import { RuntimeClient } from './client'
+import { terminalSendHandler } from '../handlers/terminal-send'
 import { launchOrcaApp } from './launch'
 import { addEnvironmentFromPairingCode } from './environments'
 import { RuntimeClientError } from './types'
@@ -137,9 +138,28 @@ describe('CLI remote WebSocket transport', () => {
     const client = new RuntimeClient('/tmp/unused', 5_000, barePayload)
     expect((await client.getCliStatus()).result).not.toHaveProperty('remoteServer')
     expect((await client.openOrca()).result).not.toHaveProperty('remoteServer')
+    await expect(
+      terminalSendHandler({
+        client,
+        flags: new Map<string, string | true>([
+          ['terminal', 'term-test'],
+          ['text', 'synthetic prompt'],
+          ['enter', true],
+          ['wait-submit', '1']
+        ]),
+        cwd: '/tmp/unused',
+        json: true
+      })
+    ).rejects.toMatchObject({ code: 'incompatible_runtime' })
     const status = await client.getCliStatus({ includeRemoteServer: true })
 
-    expect(runtime.requestParams).toEqual([undefined, undefined, { includeRemoteServer: true }])
+    expect(runtime.requestMethods).toEqual(Array(4).fill('status.get'))
+    expect(runtime.requestParams).toEqual([
+      undefined,
+      undefined,
+      undefined,
+      { includeRemoteServer: true }
+    ])
     expect(status.result.app).toEqual({ running: false, pid: null })
     expect(status.result.runtime.reachable).toBe(true)
     expect(status.result.runtime.runtimeId).toBe('runtime-ws-2')
