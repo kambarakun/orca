@@ -19,6 +19,8 @@ function validGrant(device: DeviceEntry): boolean {
     typeof device.deviceId === 'string' &&
     device.deviceId.length > 0 &&
     device.deviceId.length <= 160 &&
+    typeof device.token === 'string' &&
+    device.token.length > 0 &&
     typeof device.name === 'string' &&
     (device.scope === 'runtime' || device.scope === 'mobile') &&
     Number.isSafeInteger(device.pairedAt) &&
@@ -48,7 +50,12 @@ export function collectRemoteServerStatus(
   wiring: Pick<MobileSocketWiring, 'getAuthenticatedConnections'> | null
 ): RemoteServerStatus {
   const devices = registry?.listDevices()
-  if (!registry?.statusAvailable || !devices || !devices.every(validGrant)) {
+  if (
+    !registry?.statusAvailable ||
+    !devices ||
+    !devices.every(validGrant) ||
+    new Set(devices.map((device) => device.deviceId)).size !== devices.length
+  ) {
     return {
       listener,
       grants: { state: 'unavailable' },
