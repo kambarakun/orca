@@ -126,6 +126,40 @@ it('distinguishes a missing registry from malformed and inaccessible registries 
   })
 })
 
+it.each(['missing token', 'empty token', 'duplicate identity'])(
+  'reports an unavailable inventory for a registry with %s',
+  (invalid) => {
+    const path = profile()
+    const file = join(path, DEVICE_REGISTRY_FILENAME)
+    const device = {
+      deviceId: 'test-client',
+      name: 'Client A',
+      scope: 'runtime',
+      token: invalid === 'missing token' ? undefined : invalid === 'empty token' ? '' : 'token-a',
+      pairedAt: 1,
+      lastSeenAt: 2
+    }
+    const devices = [device]
+    if (invalid === 'duplicate identity') {
+      devices.push({ ...device, name: 'Client B', token: 'token-b' })
+    }
+    const contents = JSON.stringify(devices)
+    fs.writeFileSync(file, contents)
+    const registry = new DeviceRegistry(path)
+    const getAuthenticatedConnections = vi.fn(() => [
+      { deviceId: device.deviceId, scope: 'runtime' as const, transport: 'direct' as const }
+    ])
+
+    expect(collectRemoteServerStatus(listener, registry, { getAuthenticatedConnections })).toEqual({
+      listener,
+      grants: { state: 'unavailable' },
+      connectedClients: { state: 'unavailable' }
+    })
+    expect(getAuthenticatedConnections).not.toHaveBeenCalled()
+    expect(fs.readFileSync(file, 'utf8')).toBe(contents)
+  }
+)
+
 it('bounds returned detail while retaining exact totals, and does not manufacture zeros for absent providers', () => {
   expect(collectRemoteServerStatus({ state: 'disabled' }, null, null)).toEqual({
     listener: { state: 'disabled' },

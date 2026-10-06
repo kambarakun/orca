@@ -202,7 +202,8 @@ probes omit it. The block describes the server answering that request:
   reflected when the existing connection/heartbeat handling detects it.
 
 Both lists return up to 100 entries and indicate omitted entries with
-`truncated: true`; totals still cover all observed records. Names are limited to
+`truncated: true`; totals still cover all observed records. This status endpoint
+has no pagination or continuation for retrieving omitted entries. Names are limited to
 160 characters and stripped of terminal controls. Tokens, keys, pairing URLs,
 relay credentials, and push registrations are never included.
 
