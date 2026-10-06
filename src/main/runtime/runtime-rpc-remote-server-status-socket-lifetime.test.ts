@@ -272,6 +272,7 @@ it('reports listener failure without inventing a port, and keeps two server inst
 
 it('keeps routine status probes free of diagnostics even for authorized callers', async () => {
   await withServer(async (server, path) => {
+    const inventory = vi.spyOn(server.getDeviceRegistry()!, 'listDevices')
     const metadata = readRuntimeMetadata(path)!
     for (const params of [undefined, { includeRemoteServer: false }]) {
       const response = await sendRequest(metadata.transports[0]!.endpoint, {
@@ -291,6 +292,7 @@ it('keeps routine status probes free of diagnostics even for authorized callers'
         throw new Error('Probe failed')
       }
       expect(probe.result).not.toHaveProperty('remoteServer')
+      expect(inventory).not.toHaveBeenCalled()
       const requested = await client.request<RuntimeStatus>(
         'status.get',
         { includeRemoteServer: true },
@@ -300,7 +302,9 @@ it('keeps routine status probes free of diagnostics even for authorized callers'
         ok: true,
         result: { remoteServer: { connectedClients: { count: 1 } } }
       })
+      expect(inventory).toHaveBeenCalledOnce()
     } finally {
+      inventory.mockRestore()
       client.close()
     }
   })
