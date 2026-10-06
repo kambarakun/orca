@@ -42,6 +42,7 @@ describe.skipIf(process.platform === 'win32')('CLI runtime status', () => {
     async (remoteServer) => {
       const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-status-'))
       const endpoint = join(userDataPath, 'runtime.sock')
+      const requestParams: unknown[] = []
       const server = createServer((socket) => {
         sockets.add(socket)
         socket.once('close', () => sockets.delete(socket))
@@ -51,6 +52,7 @@ describe.skipIf(process.platform === 'win32')('CLI runtime status', () => {
             id: string
             params?: { includeRemoteServer?: boolean }
           }
+          requestParams.push(request.params)
           socket.write(
             `${JSON.stringify({
               id: request.id,
@@ -88,8 +90,11 @@ describe.skipIf(process.platform === 'win32')('CLI runtime status', () => {
         })
       )
 
-      const status = await new RuntimeClient(userDataPath).getCliStatus()
+      const client = new RuntimeClient(userDataPath)
+      expect((await client.getCliStatus()).result).not.toHaveProperty('remoteServer')
+      const status = await client.getCliStatus({ includeRemoteServer: true })
 
+      expect(requestParams).toEqual([undefined, { includeRemoteServer: true }])
       expect(status.result.remoteServer).toEqual(remoteServer)
       expect(status.result.runtime).toMatchObject({
         reachable: true,
